@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 struct ModelMetadata: Identifiable, Codable {
     var id: UUID
