@@ -5,34 +5,41 @@ import Combine
 @MainActor
 class CaptureManager: ObservableObject {
     @Published var session: ObjectCaptureSession?
+    @Published var isUnsupported = false
+    private(set) var capturedImagesDir: URL?
 
     func startNewSession() {
-        // Create a fresh unique capture directory each time
-        let captureDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Capture-\(UUID().uuidString)", isDirectory: true)
-        let imagesDir = captureDir.appendingPathComponent("Images", isDirectory: true)
-        let checkpointDir = captureDir.appendingPathComponent("Checkpoints", isDirectory: true)
-
-        // Create both directories upfront — ObjectCaptureSession requires them to exist
-        do {
-            try FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
-            try FileManager.default.createDirectory(at: checkpointDir, withIntermediateDirectories: true)
-        } catch {
-            print("CaptureManager: Failed to create directories: \(error)")
+        guard ObjectCaptureSession.isSupported else {
+            isUnsupported = true
             return
         }
 
-        var configuration = ObjectCaptureSession.Configuration()
-        configuration.checkpointDirectory = checkpointDir
-        configuration.isOverCaptureEnabled = true  // allows capturing extra angles for better quality
+        let captureID = UUID().uuidString
+        Task.detached(priority: .userInitiated) {
+            let imagesDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("Capture-\(captureID)/Images", isDirectory: true)
 
-        let newSession = ObjectCaptureSession()
-        newSession.start(imagesDirectory: imagesDir, configuration: configuration)
-        self.session = newSession
+            do {
+                try FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+            } catch {
+                print("CaptureManager: failed to create directory: \(error)")
+                return
+            }
+
+            await MainActor.run {
+                self.capturedImagesDir = imagesDir
+                let newSession = ObjectCaptureSession()
+                newSession.start(imagesDirectory: imagesDir,
+                                 configuration: ObjectCaptureSession.Configuration())
+                self.session = newSession
+            }
+        }
     }
 
     func reset() {
         session?.cancel()
         session = nil
+        isUnsupported = false
+        capturedImagesDir = nil
     }
 }
