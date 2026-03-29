@@ -1,26 +1,40 @@
 import SwiftUI
-import SceneKit
+import QuickLook
 
 struct ModelPreviewView: View {
     let usdzURL: URL
     
     var body: some View {
-        SceneView(
-            scene: createScene(from: usdzURL),
-            options: [.autoenablesDefaultLighting, .allowsCameraControl]
-        )
-        .background(Color.white)
-        .navigationTitle("Preview")
-        .navigationBarTitleDisplayMode(.inline)
+        ARQuickLookView(url: usdzURL)
+            .edgesIgnoringSafeArea(.all)
+            .navigationTitle("Preview")
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct ARQuickLookView: UIViewControllerRepresentable {
+    let url: URL
+    
+    func makeUIViewController(context: Context) -> QLPreviewController {
+        let controller = QLPreviewController()
+        controller.dataSource = context.coordinator
+        return controller
     }
     
-    private func createScene(from url: URL) -> SCNScene? {
-        do {
-            let scene = try SCNScene(url: url, options: nil)
-            return scene
-        } catch {
-            print("Failed to load 3D model: \(error)")
-            return nil
+    func updateUIViewController(_ uiViewController: QLPreviewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(url: url)
+    }
+    
+    class Coordinator: NSObject, QLPreviewControllerDataSource {
+        let url: URL
+        init(url: URL) { self.url = url }
+        
+        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+        
+        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { 
+            url as NSURL 
         }
     }
 }

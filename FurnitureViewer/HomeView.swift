@@ -38,10 +38,10 @@ struct HomeView: View {
                                                 .font(.title)
                                                 .foregroundStyle(.blue.gradient)
                                             VStack(alignment: .leading, spacing: 4) {
-                                                Text(model.metadata.creator)
+                                                Text(model.metadata.name)
                                                     .font(.headline)
                                                     .foregroundStyle(.primary)
-                                                Text(model.metadata.dateOfCreation.formatted(date: .abbreviated, time: .omitted))
+                                                Text("By \(model.metadata.creator) • \(model.metadata.dateOfCreation.formatted(date: .abbreviated, time: .omitted))")
                                                     .font(.subheadline)
                                                     .foregroundStyle(.secondary)
                                             }
@@ -69,7 +69,7 @@ struct HomeView: View {
                         }
                     }
                 }
-                .navigationTitle("Furniture")
+                .navigationTitle("Furniture Viewer")
 
 
                 Button { activeSheet = .capture } label: {
@@ -111,8 +111,8 @@ struct HomeView: View {
                 case .metadata(let modelURL):
                     MetadataEntryView(
                         usdzURL: modelURL,
-                        onSave: { creator in
-                            saveModel(from: modelURL, creator: creator)
+                        onSave: { id, name, creator, date in
+                            saveModel(from: modelURL, id: id, name: name, creator: creator, date: date)
                             activeSheet = nil
                         },
                         onCancel: {
@@ -125,15 +125,16 @@ struct HomeView: View {
     }
 
 
-    private func saveModel(from usdzURL: URL, creator: String) {
-        let modelID = UUID()
+    private func saveModel(from usdzURL: URL, id: UUID, name: String, creator: String, date: Date) {
+        let modelID = id
         let fileName = "\(modelID).usdz"
         let destURL = storage.modelURL(for: FurnitureModel(
             id: modelID,
             metadata: ModelMetadata(
                 id: modelID,
+                name: name,
                 creator: creator,
-                dateOfCreation: .now,
+                dateOfCreation: date,
                 lastUpdated: .now,
                 size: 0,
                 modelReference: fileName
@@ -149,8 +150,9 @@ struct HomeView: View {
                 id: modelID,
                 metadata: ModelMetadata(
                     id: modelID,
+                    name: name,
                     creator: creator,
-                    dateOfCreation: .now,
+                    dateOfCreation: date,
                     lastUpdated: .now,
                     size: size,
                     modelReference: fileName

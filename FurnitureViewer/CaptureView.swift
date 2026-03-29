@@ -13,8 +13,15 @@ struct CaptureView: View {
                 unsupportedView
 
             } else if let session = manager.session {
-                ObjectCaptureView(session: session)
-                    .edgesIgnoringSafeArea(.all)
+                ZStack {
+                    ObjectCaptureView(session: session)
+                        .edgesIgnoringSafeArea(.all)
+                    
+                    if session.state == .capturing {
+                        ObjectCapturePointCloudView(session: session)
+                            .edgesIgnoringSafeArea(.all)
+                    }
+                }
 
                 VStack {
                     HStack {
@@ -37,6 +44,29 @@ struct CaptureView: View {
                             .padding()
                         }
                     }
+                    
+                    if session.state == .capturing {
+                        VStack(spacing: 8) {
+                            let progress = min(Double(session.numberOfShotsTaken) / 50.0, 1.0)
+                            ProgressView(value: progress)
+                                .progressViewStyle(.linear)
+                                .tint(.green)
+                            
+                            HStack {
+                                Text("\(session.numberOfShotsTaken) Images")
+                                Spacer()
+                                Text("\(Int(progress * 100))%")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding(.horizontal, 40)
+                        .padding(.top, 16)
+                    }
+
                     Spacer().allowsHitTesting(false)
                 }
 
@@ -57,6 +87,11 @@ struct CaptureView: View {
                 dismiss()
             }
         }
+        .onChange(of: manager.session?.numberOfShotsTaken) { _, count in
+            if let count, count >= 50, manager.session?.state == .capturing {
+                manager.session?.finish()
+            }
+        }
         .onAppear {
             Task {
                 try? await Task.sleep(for: .milliseconds(500))
@@ -74,9 +109,9 @@ struct CaptureView: View {
         case .ready:
             VStack(spacing: 12) {
                 GuidanceCard(
-                    icon: "arrow.down.to.line.compact",
-                    title: "Step 1 — Scan the Floor",
-                    subtitle: "Slowly sweep the camera over the floor around the furniture for 3-4 seconds. This lets ARKit detect the surface.\nThen aim at the furniture and tap it — or press Begin."
+                    icon: "viewfinder.circle.fill",
+                    title: "Step 1 — Scan the Surface",
+                    subtitle: "Slowly sweep your camera over the surface around the object for 3-4 seconds. Then aim at the object and tap it."
                 )
 
                 let hint = feedbackHint(from: session.feedback)
@@ -99,7 +134,7 @@ struct CaptureView: View {
             }
 
         case .initializing:
-            GuidanceCard(icon: "arrow.triangle.2.circlepath.camera",
+            GuidanceCard(icon: "gearshape.2.fill",
                          title: "Initializing…",
                          subtitle: "Setting up the scanning session.")
 
@@ -108,7 +143,7 @@ struct CaptureView: View {
                 GuidanceCard(
                     icon: "cube.transparent",
                     title: "Resize the Box, Then Confirm",
-                    subtitle: "• DRAG the orange handles to resize the box around your furniture\n• DRAG the circle on top to rotate\n• When it fits — press the Start Capturing button below"
+                    subtitle: "• DRAG handles to fit the box around your object completely.\n• DRAG the top circle to rotate.\n• Ensure the entire item is inside."
                 )
 
                 Button {
@@ -126,10 +161,7 @@ struct CaptureView: View {
             }
 
         case .capturing:
-            GuidanceCard(
-                icon: "camera.fill",
-                title: "Scanning — walk slowly",
-                subtitle: "Walk a full circle at eye level. Then crouch to capture the legs. Raise the phone for the top. Keep the chair in frame the whole time. Tap Done when every side is covered.")
+            EmptyView()
 
         case .finishing:
             GuidanceCard(icon: "checkmark.circle.fill",
@@ -152,11 +184,11 @@ struct CaptureView: View {
     }
 
     private func feedbackHint(from feedback: Set<ObjectCaptureSession.Feedback>) -> String {
-        if feedback.contains(.objectTooClose) { return "Too close — step back until the whole piece fits in frame." }
-        if feedback.contains(.objectTooFar)   { return "Too far — move a little closer to the furniture." }
-        if feedback.contains(.movingTooFast)  { return "Moving too fast — hold the phone steady." }
-        if feedback.contains(.environmentLowLight) { return "Too dark — improve the lighting before scanning." }
-        if feedback.contains(.outOfFieldOfView) { return "Object is out of frame — center it in the camera." }
+        if feedback.contains(.objectTooClose) { return "Too close ! Please step back to include the whole object." }
+        if feedback.contains(.objectTooFar)   { return "Too far ! Move closer to capture more detail." }
+        if feedback.contains(.movingTooFast)  { return "Moving too fast ! Slow down for a better scan." }
+        if feedback.contains(.environmentLowLight) { return "Too dark ! Turn on lights or move to a brighter environment." }
+        if feedback.contains(.outOfFieldOfView) { return "Object is out of frame ! Keep the item centered." }
         return ""
     }
 

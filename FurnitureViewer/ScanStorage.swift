@@ -3,6 +3,7 @@ import Combine
 
 struct ModelMetadata: Identifiable, Codable {
     var id: UUID
+    var name: String
     var creator: String
     var dateOfCreation: Date
     var lastUpdated: Date
