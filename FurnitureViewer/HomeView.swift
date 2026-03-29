@@ -1,4 +1,5 @@
 import SwiftUI
+import QuickLookThumbnailing
 
 enum ActiveSheet: Identifiable {
     case capture
@@ -17,6 +18,7 @@ enum ActiveSheet: Identifiable {
 struct HomeView: View {
     @StateObject private var storage = ScanStorage()
     @State private var activeSheet: ActiveSheet?
+    @State private var thumbnails: [UUID: UIImage] = [:]
 
     var body: some View {
         NavigationStack {
@@ -34,9 +36,25 @@ struct HomeView: View {
                                 ForEach(storage.models) { model in
                                     NavigationLink(destination: ModelPreviewView(usdzURL: storage.modelURL(for: model))) {
                                         HStack(spacing: 16) {
-                                            Image(systemName: "cube.transparent.fill")
-                                                .font(.title)
-                                                .foregroundStyle(.blue.gradient)
+                                            if let uiImage = thumbnails[model.id] {
+                                                Image(uiImage: uiImage)
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fill)
+                                                    .frame(width: 60, height: 60)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                            } else {
+                                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                    .fill(Color.secondary.opacity(0.1))
+                                                    .frame(width: 60, height: 60)
+                                                    .overlay(
+                                                        Image(systemName: "cube.fill")
+                                                            .font(.title)
+                                                            .foregroundStyle(.blue.gradient)
+                                                    )
+                                                    .onAppear {
+                                                        loadThumbnail(for: model)
+                                                    }
+                                            }
                                             VStack(alignment: .leading, spacing: 4) {
                                                 Text(model.metadata.name)
                                                     .font(.headline)
@@ -162,6 +180,24 @@ struct HomeView: View {
             storage.save(model)
         } catch {
             print("HomeView: failed to save model: \(error)")
+        }
+    }
+
+    private func loadThumbnail(for model: FurnitureModel) {
+        let size = CGSize(width: 120, height: 120)
+        let request = QLThumbnailGenerator.Request(
+            fileAt: storage.modelURL(for: model),
+            size: size,
+            scale: UIScreen.main.scale,
+            representationTypes: .thumbnail
+        )
+        
+        QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { thumbnail, error in
+            if let cgImage = thumbnail?.cgImage {
+                DispatchQueue.main.async {
+                    self.thumbnails[model.id] = UIImage(cgImage: cgImage)
+                }
+            }
         }
     }
 

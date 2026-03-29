@@ -5,12 +5,12 @@ struct MainTabView: View {
         TabView {
             HomeView()
                 .tabItem {
-                    Image(systemName: "house.fill")
-                }
-            
-            Text("Models")
-                .tabItem {
                     Image(systemName: "cube.fill")
+                }
+
+            HomeView()
+                .tabItem {
+                    Image(systemName: "house.fill")
                 }
             
             Text("Contacts")
