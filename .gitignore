@@ -1,0 +1,14 @@
+# Python
+backend/venv/
+backend/__pycache__/
+*.pyc
+
+# Backend uploads
+backend/uploads/
+
+# Database (optional)
+backend/furniture.db
+
+# OS junk
+.DS_Store
+Thumbs.db
