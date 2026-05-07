@@ -241,4 +241,3 @@ private struct GuidanceCard: View {
     }
 }
 
-

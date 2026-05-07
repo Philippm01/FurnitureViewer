@@ -5,10 +5,12 @@ struct ModelMetadata: Identifiable, Codable {
     var id: UUID
     var name: String
     var creator: String
+    var creatorId: String
     var dateOfCreation: Date
     var lastUpdated: Date
     var size: Int64
     var modelReference: String
+    var previewImageReference: String?
 }
 
 struct FurnitureModel: Identifiable, Codable {
@@ -51,6 +53,11 @@ class ScanStorage: ObservableObject {
 
     func modelURL(for model: FurnitureModel) -> URL {
         modelsDir.appendingPathComponent(model.modelFileName)
+    }
+
+    func previewImageURL(for model: FurnitureModel) -> URL? {
+        guard let reference = model.metadata.previewImageReference else { return nil }
+        return modelsDir.appendingPathComponent(reference)
     }
 
     private func persist(_ model: FurnitureModel) {

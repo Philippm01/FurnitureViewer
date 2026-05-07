@@ -3,12 +3,36 @@ import QuickLook
 
 struct ModelPreviewView: View {
     let usdzURL: URL
+    let previewImageURL: URL?
+    
+    @State private var showPreviewImage = true
     
     var body: some View {
-        ARQuickLookView(url: usdzURL)
-            .edgesIgnoringSafeArea(.all)
-            .navigationTitle("Preview")
-            .navigationBarTitleDisplayMode(.inline)
+        VStack(spacing: 0) {
+            if showPreviewImage, let imageURL = previewImageURL, let data = try? Data(contentsOf: imageURL), let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 250)
+                    .background(Color(UIColor.secondarySystemBackground))
+            }
+            
+            ARQuickLookView(url: usdzURL)
+                .edgesIgnoringSafeArea(showPreviewImage && previewImageURL != nil ? [] : .all)
+        }
+        .navigationTitle("Preview")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if previewImageURL != nil {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(showPreviewImage ? "Hide Image" : "Show Image") {
+                        withAnimation {
+                            showPreviewImage.toggle()
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

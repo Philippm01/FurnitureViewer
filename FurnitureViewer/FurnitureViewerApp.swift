@@ -5,17 +5,17 @@ struct MainTabView: View {
         TabView {
             HomeView()
                 .tabItem {
-                    Image(systemName: "cube.fill")
+                    Label("My Scans", systemImage: "cube.fill")
                 }
 
-            HomeView()
+            DiscoverView()
                 .tabItem {
-                    Image(systemName: "house.fill")
+                    Label("Discover", systemImage: "globe")
                 }
             
-            Text("Contacts")
+            Text("User Profile")
                 .tabItem {
-                    Image(systemName: "person.2.fill")
+                    Label("Profile", systemImage: "person.circle")
                 }
         }
     }
