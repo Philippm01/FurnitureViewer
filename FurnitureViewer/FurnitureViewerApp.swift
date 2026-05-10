@@ -13,9 +13,9 @@ struct MainTabView: View {
                     Label("Discover", systemImage: "globe")
                 }
             
-            Text("User Profile")
+            FriendsView()
                 .tabItem {
-                    Label("Profile", systemImage: "person.circle")
+                    Label("Friends", systemImage: "person.2.fill")
                 }
         }
     }

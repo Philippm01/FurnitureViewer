@@ -80,6 +80,7 @@ struct HomeView: View {
                 .padding(.trailing, 20)
                 .padding(.bottom, 30)
             }
+            .navigationTitle("My Scans")
             .fullScreenCover(item: $activeSheet) { sheet in
                 switch sheet {
                 case .capture:
