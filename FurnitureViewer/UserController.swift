@@ -15,7 +15,7 @@ struct User: Codable, Identifiable {
 }
 
 class UserController {
-    private let baseURL = "http://34.94.92.43/users"
+    private let baseURL = "http://35.236.77.209/users"
 
     func create(user: User) async throws -> User {
         guard let url = URL(string: "\(baseURL)/") else { throw URLError(.badURL) }

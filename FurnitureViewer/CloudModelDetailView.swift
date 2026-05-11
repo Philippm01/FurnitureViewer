@@ -9,7 +9,7 @@ struct CloudModelDetailView: View {
     @State private var showARPreview = false
 
     private let controller = ModelController()
-    private let baseURL = "http://34.94.92.43/models"
+    private let baseURL = "http://35.236.77.209/models"
 
     init(model: FurnitureAPIModel) {
         self.model = model

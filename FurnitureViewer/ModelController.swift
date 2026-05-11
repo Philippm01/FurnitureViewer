@@ -64,7 +64,7 @@ struct UpdateModelPayload: Encodable {
 }
 
 class ModelController {
-    private let baseURL = "http://34.94.92.43/models"
+    private let baseURL = "http://35.236.77.209/models"
 
     func discover(page: Int = 1) async throws -> [FurnitureAPIModel] {
         var components = URLComponents(string: "\(baseURL)/discover")!

@@ -7,6 +7,8 @@ struct CaptureView: View {
     @StateObject private var manager = CaptureManager()
     @Environment(\.dismiss) private var dismiss
 
+    @State private var showCancelAlert = false
+
     var body: some View {
         ZStack {
             if manager.isUnsupported {
@@ -26,8 +28,12 @@ struct CaptureView: View {
                 VStack {
                     HStack {
                         Button("Cancel") {
-                            session.cancel()
-                            dismiss()
+                            if session.numberOfShotsTaken > 0 {
+                                showCancelAlert = true
+                            } else {
+                                session.cancel()
+                                dismiss()
+                            }
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.red)
@@ -79,6 +85,16 @@ struct CaptureView: View {
             } else {
                 loadingView
             }
+        }
+        .interactiveDismissDisabled(true)
+        .alert("Discard Scan?", isPresented: $showCancelAlert) {
+            Button("Discard", role: .destructive) {
+                manager.session?.cancel()
+                dismiss()
+            }
+            Button("Keep Scanning", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to discard your current progress? All captured images will be deleted.")
         }
         .onChange(of: manager.session?.state) { _, newState in
             guard let newState else { return }

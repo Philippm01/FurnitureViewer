@@ -10,6 +10,7 @@ struct ReconstructionView: View {
     @State private var statusMessage = "Preparing…"
     @State private var errorMessage: String?
     @State private var isProcessing = false
+    @State private var showCancelAlert = false
 
     var body: some View {
         ZStack {
@@ -69,12 +70,12 @@ struct ReconstructionView: View {
                         .tint(.white)
                         .foregroundStyle(.black)
 
-                        Button("Cancel") { onCancel() }
+                        Button("Cancel") { showCancelAlert = true }
                             .foregroundStyle(.white.opacity(0.7))
                     }
                     .padding(.bottom, 40)
                 } else {
-                    Button("Cancel") { onCancel() }
+                    Button("Cancel") { showCancelAlert = true }
                         .foregroundStyle(.white.opacity(0.55))
                         .padding(.bottom, 40)
                 }
@@ -82,6 +83,15 @@ struct ReconstructionView: View {
         }
         .task {
             await runReconstruction()
+        }
+        .interactiveDismissDisabled(true)
+        .alert("Stop Reconstruction?", isPresented: $showCancelAlert) {
+            Button("Stop", role: .destructive) {
+                onCancel()
+            }
+            Button("Keep Building", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to stop? Your progress will be lost and the model won't be saved.")
         }
     }
 
