@@ -10,4 +10,6 @@ enum APIConfig {
     static var shareURL: String { "\(host)/models/share" }
     static var receivedURL: String { "\(host)/models/received" }
     static var streamSessionURL: String { "\(streamHost)/stream/session" }
+    static var streamCallURL: String { "\(streamHost)/stream/call" }
+    static var streamIncomingURL: String { "\(streamHost)/stream/incoming" }
 }

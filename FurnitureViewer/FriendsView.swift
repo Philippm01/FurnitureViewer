@@ -8,9 +8,21 @@ struct FriendsView: View {
     @State private var searchText = ""
     @State private var isLoading = false
     
+    @State private var selectedFriendToSend: User?
+    @State private var showSendModelSheet = false
+    
+    // Streaming/Calling States
+    @State private var selectedFriendToStream: User?
+    @State private var showStreamModelPicker = false
+    @State private var incomingStreamId = ""
+    @State private var showIncomingCallRing = false
+    
     @State private var receivedModels: [FurnitureAPIModel] = []
     @State private var isStreaming = false
     @State private var streamSession: StreamSessionResponse?
+    @State private var isHost = true
+    @State private var streamingModelName = ""
+    @State private var pollTimer: Timer?
 
     private let friendsController = FriendsController()
     private let userController = UserController()
@@ -19,6 +31,32 @@ struct FriendsView: View {
 
     var body: some View {
         List {
+            Section(header: Text("Answer AR Stream Call")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Enter the Stream ID shared by your caller:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    HStack {
+                        TextField("Stream ID", text: $incomingStreamId)
+                            .textFieldStyle(.roundedBorder)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                        
+                        Button("Simulate Ring") {
+                            guard !incomingStreamId.isEmpty else { return }
+                            withAnimation(.spring()) {
+                                showIncomingCallRing = true
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                        .disabled(incomingStreamId.isEmpty)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            
             if !receivedModels.isEmpty {
                 Section(header: Text("Received Models")) {
                     ForEach(receivedModels) { model in
@@ -45,7 +83,7 @@ struct FriendsView: View {
                         searchUsers()
                     }
                 
-                ForEach(searchResults) { user in
+                ForEach(searchResults, id: \.username) { user in
                     HStack {
                         VStack(alignment: .leading) {
                             Text("\(user.firstName) \(user.lastName)")
@@ -77,7 +115,7 @@ struct FriendsView: View {
                     Text("No friends yet.")
                         .foregroundColor(.secondary)
                 } else {
-                    ForEach(friends) { friend in
+                    ForEach(friends, id: \.username) { friend in
                         HStack {
                             VStack(alignment: .leading) {
                                 Text("\(friend.firstName) \(friend.lastName)")
@@ -88,8 +126,10 @@ struct FriendsView: View {
                             }
                             Spacer()
                             
+                            // Call / Stream Trigger Button
                             Button {
-                                startStream(with: friend)
+                                selectedFriendToStream = friend
+                                showStreamModelPicker = true
                             } label: {
                                 Image(systemName: "video.fill")
                                     .foregroundColor(.red)
@@ -119,15 +159,36 @@ struct FriendsView: View {
         .navigationTitle("Friends")
         .onAppear {
             loadFriends()
+            startPolling()
+        }
+        .onDisappear {
+            stopPolling()
         }
         .sheet(isPresented: $showSendModelSheet) {
             if let friend = selectedFriendToSend {
                 SendModelView(friend: friend)
             }
         }
+        .sheet(isPresented: $showStreamModelPicker) {
+            if let friend = selectedFriendToStream {
+                StreamModelPickerView(friend: friend) { selectedModelName in
+                    startStreamHosting(modelName: selectedModelName)
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showIncomingCallRing) {
+            IncomingCallView(streamId: incomingStreamId) {
+                // Accepted
+                showIncomingCallRing = false
+                acceptIncomingStream(streamId: incomingStreamId)
+            } onDeny: {
+                // Denied
+                showIncomingCallRing = false
+            }
+        }
         .fullScreenCover(isPresented: $isStreaming) {
             if let session = streamSession {
-                LiveStreamView(session: session)
+                LiveStreamView(session: session, isHost: isHost, modelName: streamingModelName)
             }
         }
     }
@@ -151,18 +212,68 @@ struct FriendsView: View {
         }
     }
 
-    private func startStream(with friend: User) {
+    private func startStreamHosting(modelName: String) {
+        guard let callerId = session.currentUser?.id, let receiverId = selectedFriendToStream?.id else { return }
         Task {
             do {
-                let session = try await streamController.createSession()
+                let sessionRes = try await streamController.createSession()
+                // Initiate call with backend signaling
+                _ = try await streamController.initiateCall(callerId: callerId, receiverId: receiverId)
                 await MainActor.run {
-                    self.streamSession = session
+                    self.streamSession = sessionRes
+                    self.isHost = true
+                    self.streamingModelName = modelName
                     self.isStreaming = true
                 }
             } catch {
                 print("Failed to start stream: \(error)")
             }
         }
+    }
+    
+    private func startPolling() {
+        pollTimer?.invalidate()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+            pollIncomingCalls()
+        }
+    }
+    
+    private func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+    }
+
+    private func pollIncomingCalls() {
+        guard let userId = session.currentUser?.id, !userId.isEmpty else { return }
+        Task {
+            do {
+                let calls = try await streamController.checkIncomingCalls(userId: userId)
+                if let call = calls.first, let streamId = call.streamId {
+                    await MainActor.run {
+                        if !self.showIncomingCallRing && !self.isStreaming {
+                            self.incomingStreamId = streamId
+                            withAnimation(.spring()) {
+                                self.showIncomingCallRing = true
+                            }
+                        }
+                    }
+                }
+            } catch {
+                // Ignore silent polling errors
+            }
+        }
+    }
+    
+    private func acceptIncomingStream(streamId: String) {
+        let baseWs = APIConfig.streamHost.replacingOccurrences(of: "http://", with: "ws://")
+        let viewerWs = "\(baseWs)/ws/\(streamId)/viewer"
+        let hostWs = "\(baseWs)/ws/\(streamId)/host"
+        let sessionRes = StreamSessionResponse(streamId: streamId, hostWs: hostWs, viewerWs: viewerWs)
+        
+        self.streamSession = sessionRes
+        self.isHost = false
+        self.streamingModelName = "Shared AR View"
+        self.isStreaming = true
     }
     
     private func searchUsers() {
@@ -208,6 +319,161 @@ struct FriendsView: View {
     }
 }
 
+// MARK: - Premium Incoming Call Interface
+struct IncomingCallView: View {
+    let streamId: String
+    let onAccept: () -> Void
+    let onDeny: () -> Void
+    @State private var isRinging = false
+    
+    var body: some View {
+        ZStack {
+            // Premium dark background
+            LinearGradient(colors: [Color.black.opacity(0.85), Color.black], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 40) {
+                Spacer()
+                
+                VStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.blue.opacity(0.2))
+                            .frame(width: 140, height: 140)
+                            .scaleEffect(isRinging ? 1.3 : 1.0)
+                            .opacity(isRinging ? 0.0 : 1.0)
+                            .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false), value: isRinging)
+                        
+                        Circle()
+                            .fill(Color.blue.gradient)
+                            .frame(width: 110, height: 110)
+                            .shadow(color: .blue.opacity(0.5), radius: 15)
+                        
+                        Image(systemName: "video.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(.white)
+                    }
+                    .onAppear { isRinging = true }
+                    
+                    Text("Incoming AR Stream...")
+                        .font(.title.bold())
+                        .foregroundColor(.white)
+                    
+                    Text("Stream ID: \(streamId)")
+                        .font(.subheadline.monospaced())
+                        .foregroundColor(.white.opacity(0.6))
+                }
+                
+                Spacer()
+                
+                HStack(spacing: 60) {
+                    // Deny
+                    Button {
+                        onDeny()
+                    } label: {
+                        VStack(spacing: 8) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 75, height: 75)
+                                .overlay(
+                                    Image(systemName: "phone.down.fill")
+                                        .font(.title)
+                                        .foregroundColor(.white)
+                                )
+                            Text("Deny")
+                                .font(.caption.bold())
+                                .foregroundColor(.white)
+                        }
+                    }
+                    
+                    // Accept
+                    Button {
+                        onAccept()
+                    } label: {
+                        VStack(spacing: 8) {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 75, height: 75)
+                                .overlay(
+                                    Image(systemName: "video.fill")
+                                        .font(.title)
+                                        .foregroundColor(.white)
+                                )
+                            Text("Accept")
+                                .font(.caption.bold())
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+                .padding(.bottom, 60)
+            }
+        }
+    }
+}
+
+// MARK: - Stream Model Picker
+struct StreamModelPickerView: View {
+    let friend: User
+    let onSelectModel: (String) -> Void
+    @State private var models: [FurnitureAPIModel] = []
+    @State private var isLoading = true
+    @Environment(\.dismiss) var dismiss
+    private let controller = ModelController()
+    
+    var body: some View {
+        NavigationStack {
+            List(models) { model in
+                Button {
+                    onSelectModel(model.name)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Image(systemName: "cube.fill")
+                            .foregroundColor(.blue)
+                        VStack(alignment: .leading) {
+                            Text(model.name)
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Text(model.categories)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "video.fill")
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            .navigationTitle("Stream to \(friend.firstName)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .task {
+                do {
+                    let res = try await controller.discover(page: 1)
+                    await MainActor.run {
+                        self.models = res
+                        self.isLoading = false
+                    }
+                } catch {
+                    await MainActor.run { isLoading = false }
+                }
+            }
+            .overlay {
+                if isLoading {
+                    ProgressView()
+                } else if models.isEmpty {
+                    ContentUnavailableView("No Models Available", systemImage: "cube.transparent")
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Send Model View
 struct SendModelView: View {
     let friend: User
     @State private var myModels: [FurnitureAPIModel] = []
@@ -267,8 +533,6 @@ struct SendModelView: View {
     private func loadMyModels() async {
         isLoading = true
         do {
-            // For simplicity, we just fetch the discover list. 
-            // In a real app, we'd fetch the user's own models.
             let result = try await modelController.discover(page: 1)
             await MainActor.run {
                 self.myModels = result
@@ -297,8 +561,11 @@ struct SendModelView: View {
     }
 }
 
+// MARK: - Live Stream View
 struct LiveStreamView: View {
     let session: StreamSessionResponse
+    let isHost: Bool
+    let modelName: String
     @StateObject private var streamController = StreamController()
     @Environment(\.dismiss) var dismiss
 
@@ -309,20 +576,42 @@ struct LiveStreamView: View {
                 
                 ZStack {
                     RoundedRectangle(cornerRadius: 24)
-                        .fill(Color.black.opacity(0.1))
+                        .fill(Color.black.opacity(0.05))
                         .frame(height: 400)
                     
                     VStack(spacing: 20) {
-                        Image(systemName: "video.fill")
-                            .font(.system(size: 64))
-                            .foregroundColor(.red)
+                        ZStack {
+                            Circle()
+                                .fill(isHost ? Color.red.opacity(0.1) : Color.blue.opacity(0.1))
+                                .frame(width: 100, height: 100)
+                            
+                            Image(systemName: isHost ? "video.fill" : "eye.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(isHost ? .red : .blue)
+                        }
                         
-                        Text("Live Stream Session")
-                            .font(.title2.bold())
+                        VStack(spacing: 8) {
+                            Text(isHost ? "Hosting Live Stream" : "Viewing Live Stream")
+                                .font(.title2.bold())
+                            
+                            Text("Model: \(modelName)")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            Text("Stream ID: \(session.streamId)")
+                                .font(.caption.monospaced())
+                                .foregroundColor(.secondary)
+                        }
                         
-                        Text("ID: \(session.streamId)")
-                            .font(.caption.monospaced())
-                            .foregroundColor(.secondary)
+                        if isHost {
+                            Button {
+                                UIPasteboard.general.string = session.streamId
+                            } label: {
+                                Label("Copy Stream ID", systemImage: "doc.on.doc")
+                                    .font(.caption.bold())
+                            }
+                            .buttonStyle(.bordered)
+                        }
                     }
                 }
                 .padding()
@@ -333,17 +622,21 @@ struct LiveStreamView: View {
                     streamController.stop()
                     dismiss()
                 } label: {
-                    Text("End Stream")
+                    Text(isHost ? "End Stream" : "Leave Stream")
                         .frame(maxWidth: .infinity)
                         .padding()
                 }
                 .buttonStyle(.borderedProminent)
                 .padding()
             }
-            .navigationTitle("Streaming")
+            .navigationTitle(isHost ? "Streaming Live" : "AR Viewer")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                streamController.startHost(wsURL: session.hostWs)
+                if isHost {
+                    streamController.startHost(wsURL: session.hostWs)
+                } else {
+                    streamController.startViewer(wsURL: session.viewerWs)
+                }
             }
         }
     }

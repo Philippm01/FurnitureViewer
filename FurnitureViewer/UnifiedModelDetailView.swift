@@ -20,7 +20,7 @@ enum ModelSource {
     
     var category: String {
         switch self {
-        case .local(let m): return m.metadata.categories ?? "Unknown"
+        case .local: return "Local Scan"
         case .cloud(let m): return m.categories
         }
     }

@@ -28,6 +28,17 @@ class UserController {
         return try JSONDecoder().decode(User.self, from: data)
     }
 
+    func login(user: User) async throws -> User {
+        guard let url = URL(string: "\(baseURL)/login") else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(user)
+        
+        let (data, _) = try await URLSession.shared.data(for: request)
+        return try JSONDecoder().decode(User.self, from: data)
+    }
+
     func get(id: String) async throws -> User {
         guard let url = URL(string: "\(baseURL)/\(id)") else { throw URLError(.badURL) }
         let (data, _) = try await URLSession.shared.data(from: url)

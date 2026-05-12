@@ -119,7 +119,7 @@ struct HomeView: View {
     }
 
     private var filteredModels: [FurnitureModel] {
-        storage.models.filter { $0.metadata.creatorId == session.currentUser?.id ?? "" ?? "" }
+        storage.models.filter { $0.metadata.creatorId == session.currentUser?.id ?? "" }
     }
     private func saveModel(from usdzURL: URL, id: UUID, name: String, categories: String, date: Date, imageData: Data?) {
         let modelID = id
@@ -141,7 +141,7 @@ struct HomeView: View {
                 id: modelID,
                 name: name,
                 creator: creatorFullName,
-                creatorId: session.currentUser?.id ?? "" ?? "",
+                creatorId: session.currentUser?.id ?? "",
                 dateOfCreation: date,
                 lastUpdated: .now,
                 size: 0,
@@ -161,7 +161,7 @@ struct HomeView: View {
                     id: modelID,
                     name: name,
                     creator: creatorFullName,
-                    creatorId: session.currentUser?.id ?? "" ?? "",
+                    creatorId: session.currentUser?.id ?? "",
                     dateOfCreation: date,
                     lastUpdated: .now,
                     size: size,

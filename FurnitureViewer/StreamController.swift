@@ -13,6 +13,30 @@ struct StreamSessionResponse: Codable {
     }
 }
 
+struct StreamCallRequest: Encodable {
+    var callerId: String
+    var receiverId: String
+    
+    enum CodingKeys: String, CodingKey {
+        case callerId = "caller_id"
+        case receiverId = "receiver_id"
+    }
+}
+
+struct IncomingCallResponse: Codable {
+    var callId: String?
+    var streamId: String?
+    var callerId: String?
+    var status: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case callId = "call_id"
+        case streamId = "stream_id"
+        case callerId = "caller_id"
+        case status
+    }
+}
+
 class StreamController: NSObject, ObservableObject {
     @Published var isStreaming = false
     @Published var session: StreamSessionResponse?
@@ -28,6 +52,27 @@ class StreamController: NSObject, ObservableObject {
         let (data, _) = try await URLSession.shared.data(for: request)
         let response = try JSONDecoder().decode(StreamSessionResponse.self, from: data)
         return response
+    }
+
+    func initiateCall(callerId: String, receiverId: String) async throws -> IncomingCallResponse {
+        guard let url = URL(string: APIConfig.streamCallURL) else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let payload = StreamCallRequest(callerId: callerId, receiverId: receiverId)
+        request.httpBody = try JSONEncoder().encode(payload)
+        
+        let (data, _) = try await URLSession.shared.data(for: request)
+        return try JSONDecoder().decode(IncomingCallResponse.self, from: data)
+    }
+
+    func checkIncomingCalls(userId: String) async throws -> [IncomingCallResponse] {
+        var components = URLComponents(string: APIConfig.streamIncomingURL)!
+        components.queryItems = [URLQueryItem(name: "user_id", value: userId)]
+        guard let url = components.url else { throw URLError(.badURL) }
+        
+        let (data, _) = try await URLSession.shared.data(from: url)
+        return try JSONDecoder().decode([IncomingCallResponse].self, from: data)
     }
 
     func startHost(wsURL: String) {

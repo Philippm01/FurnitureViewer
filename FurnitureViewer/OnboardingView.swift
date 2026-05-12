@@ -66,13 +66,13 @@ struct OnboardingView: View {
                     .transition(.move(edge: .trailing))
                 } else {
                     VStack(spacing: 16) {
-                        TextField("First Name", text: )
+                        TextField("First Name", text: $firstName)
                             .textFieldStyle(.roundedBorder)
                         
-                        TextField("Last Name", text: )
+                        TextField("Last Name", text: $lastName)
                             .textFieldStyle(.roundedBorder)
                         
-                        TextField("Username", text: )
+                        TextField("Username", text: $username)
                             .textFieldStyle(.roundedBorder)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
@@ -115,21 +115,12 @@ struct OnboardingView: View {
         
         Task {
             do {
-                let results = try await userController.search(name: username)
+                let newUser = User(id: nil, firstName: firstName, lastName: lastName, username: username)
+                let userResponse = try await userController.login(user: newUser)
                 
-                if let existingUser = results.first(where: { zsh.username.lowercased() == username.lowercased() }) {
-                    await MainActor.run {
-                        self.existingUserToConfirm = existingUser
-                        self.showConfirmation = true
-                        self.isLoading = false
-                    }
-                } else {
-                    let newUser = User(id: nil, firstName: firstName, lastName: lastName, username: username)
-                    let createdUser = try await userController.create(user: newUser)
-                    await MainActor.run {
-                        session.login(user: createdUser)
-                        self.isLoading = false
-                    }
+                await MainActor.run {
+                    session.login(user: userResponse)
+                    self.isLoading = false
                 }
             } catch {
                 await MainActor.run {
