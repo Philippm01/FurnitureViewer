@@ -1,7 +1,7 @@
 import Foundation
 
 class FriendsController {
-    private let baseURL = "http://35.236.77.209/friends"
+    private let baseURL = APIConfig.friendsURL
 
     func listFriends(userId: String) async throws -> [User] {
         guard let url = URL(string: "\(baseURL)/\(userId)") else { throw URLError(.badURL) }

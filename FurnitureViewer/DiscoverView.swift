@@ -30,7 +30,7 @@ struct DiscoverView: View {
                                         }
                                     }
                                 
-                                NavigationLink(destination: CloudModelDetailView(model: model)) {
+                                NavigationLink(destination: UnifiedModelDetailView(source: .cloud(model))) {
                                     EmptyView()
                                 }
                                 .opacity(0)

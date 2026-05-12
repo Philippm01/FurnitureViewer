@@ -45,10 +45,7 @@ struct HomeView: View {
                                     }
                                 }
                                 
-                                NavigationLink(destination: ModelPreviewView(
-                                    usdzURL: storage.modelURL(for: model),
-                                    previewImageURL: storage.previewImageURL(for: model)
-                                )) {
+                                NavigationLink(destination: UnifiedModelDetailView(source: .local(model))) {
                                     EmptyView()
                                 }
                                 .opacity(0)
@@ -122,12 +119,12 @@ struct HomeView: View {
     }
 
     private var filteredModels: [FurnitureModel] {
-        storage.models.filter { $0.metadata.creatorId == session.currentUser.id ?? "" }
+        storage.models.filter { $0.metadata.creatorId == session.currentUser?.id ?? "" ?? "" }
     }
     private func saveModel(from usdzURL: URL, id: UUID, name: String, categories: String, date: Date, imageData: Data?) {
         let modelID = id
         let fileName = "\(modelID).usdz"
-        let creatorFullName = "\(session.currentUser.firstName) \(session.currentUser.lastName)"
+        let creatorFullName = "\(session.currentUser?.firstName ?? "") \(session.currentUser?.lastName ?? "")"
         var previewImageFileName: String? = nil
 
         if let imageData = imageData {
@@ -144,7 +141,7 @@ struct HomeView: View {
                 id: modelID,
                 name: name,
                 creator: creatorFullName,
-                creatorId: session.currentUser.id ?? "",
+                creatorId: session.currentUser?.id ?? "" ?? "",
                 dateOfCreation: date,
                 lastUpdated: .now,
                 size: 0,
@@ -164,7 +161,7 @@ struct HomeView: View {
                     id: modelID,
                     name: name,
                     creator: creatorFullName,
-                    creatorId: session.currentUser.id ?? "",
+                    creatorId: session.currentUser?.id ?? "" ?? "",
                     dateOfCreation: date,
                     lastUpdated: .now,
                     size: size,
@@ -199,7 +196,7 @@ struct HomeView: View {
         imageData: Data?
     ) {
         let controller = ModelController()
-        let creatorId = session.currentUser.id ?? modelID.uuidString
+        let creatorId = session.currentUser?.id ?? "" ?? modelID.uuidString
 
         Task {
             do {

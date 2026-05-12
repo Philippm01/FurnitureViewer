@@ -5,15 +5,35 @@ import Combine
 class Session: ObservableObject {
     static let shared = Session()
     
-    @Published var currentUser: User
+    @Published var currentUser: User?
+    
+    private let userDefaultsKey = "saved_user"
     
     private init() {
-
-        self.currentUser = User(
-            id: "5b1e0f67-28f3-4a8d-8afa-2693dadf6c98",
-            firstName: "Philipp",
-            lastName: "User",
-            username: "philippm01"
-        )
+        loadUser()
+    }
+    
+    func login(user: User) {
+        self.currentUser = user
+        saveUser()
+    }
+    
+    func logout() {
+        self.currentUser = nil
+        UserDefaults.standard.removeObject(forKey: userDefaultsKey)
+    }
+    
+    func saveUser() {
+        guard let user = currentUser else { return }
+        if let encoded = try? JSONEncoder().encode(user) {
+            UserDefaults.standard.set(encoded, forKey: userDefaultsKey)
+        }
+    }
+    
+    private func loadUser() {
+        if let savedData = UserDefaults.standard.data(forKey: userDefaultsKey),
+           let decoded = try? JSONDecoder().decode(User.self, from: savedData) {
+            self.currentUser = decoded
+        }
     }
 }

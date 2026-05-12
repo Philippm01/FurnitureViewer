@@ -63,8 +63,20 @@ struct UpdateModelPayload: Encodable {
     }
 }
 
+struct ShareRequest: Encodable {
+    var senderId: String
+    var receiverId: String
+    var modelId: String
+
+    enum CodingKeys: String, CodingKey {
+        case senderId = "sender_id"
+        case receiverId = "receiver_id"
+        case modelId = "model_id"
+    }
+}
+
 class ModelController {
-    private let baseURL = "http://35.236.77.209/models"
+    private let baseURL = APIConfig.modelsURL
 
     func discover(page: Int = 1) async throws -> [FurnitureAPIModel] {
         var components = URLComponents(string: "\(baseURL)/discover")!
@@ -162,6 +174,21 @@ class ModelController {
         guard let url = URL(string: "\(baseURL)/\(id)/preview") else { throw URLError(.badURL) }
         let (data, _) = try await URLSession.shared.data(from: url)
         return data
+    }
+
+    func shareModel(request: ShareRequest) async throws {
+        guard let url = URL(string: APIConfig.shareURL) else { throw URLError(.badURL) }
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try JSONEncoder().encode(request)
+        _ = try await URLSession.shared.data(for: urlRequest)
+    }
+
+    func getReceivedModels(userId: String) async throws -> [FurnitureAPIModel] {
+        guard let url = URL(string: "\(APIConfig.receivedURL)/\(userId)") else { throw URLError(.badURL) }
+        let (data, _) = try await URLSession.shared.data(from: url)
+        return try JSONDecoder().decode([FurnitureAPIModel].self, from: data)
     }
 
     private func buildMultipart(boundary: String,

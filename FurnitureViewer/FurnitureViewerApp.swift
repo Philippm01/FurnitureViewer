@@ -1,5 +1,17 @@
 import SwiftUI
 
+struct RootView: View {
+    @StateObject private var session = Session.shared
+    
+    var body: some View {
+        if session.currentUser != nil {
+            MainTabView()
+        } else {
+            OnboardingView()
+        }
+    }
+}
+
 struct MainTabView: View {
     var body: some View {
         TabView {
@@ -25,7 +37,7 @@ struct MainTabView: View {
 struct FurnitureViewerApp: App {
     var body: some Scene {
         WindowGroup {
-            MainTabView()
+            RootView()
         }
     }
 }
