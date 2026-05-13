@@ -49,11 +49,15 @@ class WebRTCManager: NSObject, ObservableObject, SocketIOSignalingDelegate, WebR
     func callTarget(targetId: String, streamId: String, modelId: String) {
         self.isHost = true
         self.targetId = targetId
+        webRTC.setupPeerConnectionIfNeeded()
         signaling.callUser(receiverId: targetId, callerId: currentUserId, streamId: streamId, modelId: modelId)
     }
     
     func respondToCall(accepted: Bool) {
         self.isHost = false
+        if accepted {
+            webRTC.setupPeerConnectionIfNeeded()
+        }
         signaling.respondToCall(callerId: targetId, accepted: accepted)
     }
     

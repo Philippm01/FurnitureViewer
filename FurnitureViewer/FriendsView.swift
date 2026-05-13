@@ -31,146 +31,148 @@ struct FriendsView: View {
     private let modelController = ModelController()
 
     var body: some View {
-        List {
-            if !receivedModels.isEmpty {
-                Section(header: Text("Received Models")) {
-                    ForEach(receivedModels) { model in
-                        NavigationLink(destination: UnifiedModelDetailView(source: .cloud(model))) {
-                            HStack {
-                                Image(systemName: "cube.box.fill")
+        NavigationStack {
+            List {
+                if !receivedModels.isEmpty {
+                    Section(header: Text("Received Models")) {
+                        ForEach(receivedModels) { model in
+                            NavigationLink(destination: UnifiedModelDetailView(source: .cloud(model))) {
+                                HStack {
+                                    Image(systemName: "cube.box.fill")
+                                        .foregroundColor(.blue)
+                                    VStack(alignment: .leading) {
+                                        Text(model.name)
+                                            .font(.headline)
+                                        Text("From \(model.creatorName)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section(header: Text("Search Users")) {
+                    TextField("Search users by name", text: $searchText)
+                        .onSubmit {
+                            searchUsers()
+                        }
+                    
+                    ForEach(searchResults, id: \.username) { user in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text("\(user.firstName) \(user.lastName)")
+                                    .font(.headline)
+                                Text("@\(user.username)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Button {
+                                addFriend(friendId: user.id ?? "")
+                            } label: {
+                                Image(systemName: "person.badge.plus")
                                     .foregroundColor(.blue)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
+                
+                Section(header: Text("My Friends")) {
+                    if isLoading {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
+                        }
+                    } else if friends.isEmpty {
+                        Text("No friends yet.")
+                            .foregroundColor(.secondary)
+                    } else {
+                        ForEach(friends, id: \.username) { friend in
+                            HStack {
                                 VStack(alignment: .leading) {
-                                    Text(model.name)
+                                    Text("\(friend.firstName) \(friend.lastName)")
                                         .font(.headline)
-                                    Text("From \(model.creatorName)")
-                                        .font(.caption)
+                                    Text("@\(friend.username)")
+                                        .font(.subheadline)
                                         .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                
+                                // Call / Stream Trigger Button
+                                Button {
+                                    selectedFriendToStream = friend
+                                } label: {
+                                    Image(systemName: "video.fill")
+                                        .foregroundColor(.red)
+                                }
+                                .buttonStyle(.borderless)
+                                .padding(.trailing, 4)
+
+                                Button {
+                                    selectedFriendToSend = friend
+                                    showSendModelSheet = true
+                                } label: {
+                                    Image(systemName: "paperplane.fill")
+                                        .foregroundColor(.blue)
+                                }
+                                .buttonStyle(.borderless)
+                                .padding(.trailing, 8)
+                            }
+                            .swipeActions {
+                                Button("Remove", role: .destructive) {
+                                    removeFriend(friendId: friend.id ?? "")
                                 }
                             }
                         }
                     }
                 }
             }
-
-            Section(header: Text("Search Users")) {
-                TextField("Search users by name", text: $searchText)
-                    .onSubmit {
-                        searchUsers()
-                    }
-                
-                ForEach(searchResults, id: \.username) { user in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text("\(user.firstName) \(user.lastName)")
-                                .font(.headline)
-                            Text("@\(user.username)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Button {
-                            addFriend(friendId: user.id ?? "")
-                        } label: {
-                            Image(systemName: "person.badge.plus")
-                                .foregroundColor(.blue)
-                        }
-                        .buttonStyle(.borderless)
-                    }
+            .navigationTitle("Friends")
+            .onAppear {
+                loadFriends()
+            }
+            .onChange(of: session.currentUser?.id) { newId in
+                if let userId = newId, !userId.isEmpty {
+                    rtcManager.start(userId: userId)
                 }
             }
-            
-            Section(header: Text("My Friends")) {
-                if isLoading {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                        Spacer()
-                    }
-                } else if friends.isEmpty {
-                    Text("No friends yet.")
-                        .foregroundColor(.secondary)
-                } else {
-                    ForEach(friends, id: \.username) { friend in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text("\(friend.firstName) \(friend.lastName)")
-                                    .font(.headline)
-                                Text("@\(friend.username)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            
-                            // Call / Stream Trigger Button
-                            Button {
-                                selectedFriendToStream = friend
-                            } label: {
-                                Image(systemName: "video.fill")
-                                    .foregroundColor(.red)
-                            }
-                            .buttonStyle(.borderless)
-                            .padding(.trailing, 4)
-
-                            Button {
-                                selectedFriendToSend = friend
-                                showSendModelSheet = true
-                            } label: {
-                                Image(systemName: "paperplane.fill")
-                                    .foregroundColor(.blue)
-                            }
-                            .buttonStyle(.borderless)
-                            .padding(.trailing, 8)
-                        }
-                        .swipeActions {
-                            Button("Remove", role: .destructive) {
-                                removeFriend(friendId: friend.id ?? "")
-                            }
-                        }
-                    }
+            .onChange(of: rtcManager.incomingCallStreamId) { newId in
+                if let streamId = newId, !self.isStreaming {
+                    self.incomingStreamId = streamId
+                    self.showIncomingCallRing = true
                 }
             }
-        }
-        .navigationTitle("Friends")
-        .onAppear {
-            loadFriends()
-        }
-        .onChange(of: session.currentUser?.id) { newId in
-            if let userId = newId, !userId.isEmpty {
-                rtcManager.start(userId: userId)
+            .sheet(isPresented: $showSendModelSheet) {
+                if let friend = selectedFriendToSend {
+                    SendModelView(friend: friend)
+                }
             }
-        }
-        .onChange(of: rtcManager.incomingCallStreamId) { newId in
-            if let streamId = newId, !self.isStreaming {
-                self.incomingStreamId = streamId
-                self.showIncomingCallRing = true
+            .sheet(item: $selectedFriendToStream) { friend in
+                StreamModelPickerView(friend: friend) { selectedModel, localURL in
+                    startStreamHosting(model: selectedModel, localURL: localURL)
+                }
             }
-        }
-        .sheet(isPresented: $showSendModelSheet) {
-            if let friend = selectedFriendToSend {
-                SendModelView(friend: friend)
+            .fullScreenCover(isPresented: $showIncomingCallRing) {
+                IncomingCallView(streamId: incomingStreamId) {
+                    // Accepted
+                    showIncomingCallRing = false
+                    rtcManager.respondToCall(accepted: true)
+                    self.isHost = false
+                    self.isStreaming = true
+                } onDeny: {
+                    // Denied
+                    showIncomingCallRing = false
+                    rtcManager.respondToCall(accepted: false)
+                    rtcManager.incomingCallStreamId = nil
+                }
             }
-        }
-        .sheet(item: $selectedFriendToStream) { friend in
-            StreamModelPickerView(friend: friend) { selectedModel, localURL in
-                startStreamHosting(model: selectedModel, localURL: localURL)
+            .fullScreenCover(isPresented: $isStreaming) {
+                LiveStreamView(rtcManager: rtcManager, isHost: isHost, model: streamingModel, localURL: streamingLocalURL)
             }
-        }
-        .fullScreenCover(isPresented: $showIncomingCallRing) {
-            IncomingCallView(streamId: incomingStreamId) {
-                // Accepted
-                showIncomingCallRing = false
-                rtcManager.respondToCall(accepted: true)
-                self.isHost = false
-                self.isStreaming = true
-            } onDeny: {
-                // Denied
-                showIncomingCallRing = false
-                rtcManager.respondToCall(accepted: false)
-                rtcManager.incomingCallStreamId = nil
-            }
-        }
-        .fullScreenCover(isPresented: $isStreaming) {
-            LiveStreamView(rtcManager: rtcManager, isHost: isHost, model: streamingModel, localURL: streamingLocalURL)
         }
     }
     
@@ -354,7 +356,7 @@ struct StreamModelPickerView: View {
     @Environment(\.dismiss) var dismiss
     
     private var localModels: [FurnitureModel] {
-        storage.models.filter { $0.metadata.creatorId == Session.shared.currentUser?.id ?? "" }
+        storage.models
     }
     
     var body: some View {
@@ -407,8 +409,10 @@ struct StreamModelPickerView: View {
 // MARK: - Send Model View
 struct SendModelView: View {
     let friend: User
-    @State private var myModels: [FurnitureAPIModel] = []
-    @State private var isLoading = false
+    @State private var uploadedModels: [FurnitureAPIModel] = []
+    @State private var previews: [String: UIImage] = [:]
+    @State private var isLoading = true
+    @State private var isSharing = false
     @Environment(\.dismiss) var dismiss
     
     private let modelController = ModelController()
@@ -416,77 +420,176 @@ struct SendModelView: View {
 
     var body: some View {
         NavigationStack {
-            List(myModels) { model in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(model.name)
-                            .font(.headline)
-                        Text(model.categories)
-                            .font(.caption)
+            Group {
+                if isLoading {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text("Loading uploaded models...")
+                            .foregroundColor(.secondary)
                     }
-                    Spacer()
-                    Button {
-                        sendModel(model)
-                    } label: {
-                        Text("Send")
-                            .bold()
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
+                } else if uploadedModels.isEmpty {
+                    ContentUnavailableView(
+                        "No Uploaded Models",
+                        systemImage: "cloud.slash",
+                        description: Text("No uploaded models found in the cloud. Create or publish models first to share them.")
+                    )
+                } else {
+                    List(uploadedModels) { model in
+                        HStack(spacing: 16) {
+                            // Inline Thumbnail
+                            if let id = model.id, let uiImage = previews[id] {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 60, height: 60)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            } else {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.blue.gradient)
+                                    .frame(width: 60, height: 60)
+                                    .overlay(
+                                        Image(systemName: "cube.fill")
+                                            .foregroundColor(.white)
+                                    )
+                                    .onAppear {
+                                        loadPreview(for: model)
+                                    }
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(model.name)
+                                    .font(.headline)
+                                Text(model.categories)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                if let size = model.size {
+                                    Text(String(format: "%.1f MB", size))
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            Button {
+                                sendCloudModel(model)
+                            } label: {
+                                Text("Send")
+                                    .font(.subheadline.bold())
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Color.blue)
+                                    .foregroundColor(.white)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isSharing)
+                        }
+                        .padding(.vertical, 4)
                     }
-                    .buttonStyle(.plain)
+                    .listStyle(.plain)
                 }
             }
             .navigationTitle("Send to \(friend.firstName)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
                         dismiss()
                     }
+                    .disabled(isSharing)
                 }
             }
             .task {
-                await loadMyModels()
+                await loadUploadedModels()
             }
             .overlay {
-                if isLoading {
-                    ProgressView()
-                } else if myModels.isEmpty {
-                    ContentUnavailableView("No Models", systemImage: "cube", description: Text("You have no models in the cloud to send."))
+                if isSharing {
+                    ZStack {
+                        Color.black.opacity(0.4)
+                            .ignoresSafeArea()
+                        
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .scaleEffect(1.5)
+                                .tint(.white)
+                            Text("Sending model...")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                        }
+                        .padding(24)
+                        .background(Color(UIColor.systemBackground).opacity(0.2))
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(16)
+                        .shadow(radius: 10)
+                    }
                 }
             }
         }
     }
 
-    private func loadMyModels() async {
+    private func loadUploadedModels() async {
         isLoading = true
         do {
-            let result = try await modelController.discover(page: 1)
+            // Fetch first two pages of discover to ensure uploaded models are available
+            async let page1 = try? modelController.discover(page: 1)
+            async let page2 = try? modelController.discover(page: 2)
+            
+            let res1 = (await page1) ?? []
+            let res2 = (await page2) ?? []
+            
+            // Combine and remove duplicates
+            var seen = Set<String>()
+            var combined: [FurnitureAPIModel] = []
+            for m in (res1 + res2) {
+                if let id = m.id, !seen.contains(id) {
+                    seen.insert(id)
+                    combined.append(m)
+                }
+            }
+            
             await MainActor.run {
-                self.myModels = result
+                self.uploadedModels = combined
                 self.isLoading = false
             }
         } catch {
-            print("Failed to load models to share: \(error)")
-            await MainActor.run { isLoading = false }
+            await MainActor.run {
+                self.isLoading = false
+            }
         }
     }
 
-    private func sendModel(_ model: FurnitureAPIModel) {
+    private func loadPreview(for model: FurnitureAPIModel) {
+        guard let id = model.id else { return }
+        Task {
+            if let data = try? await modelController.downloadPreview(id: id),
+               let uiImage = UIImage(data: data) {
+                await MainActor.run {
+                    self.previews[id] = uiImage
+                }
+            }
+        }
+    }
+
+    private func sendCloudModel(_ model: FurnitureAPIModel) {
         guard let modelId = model.id, let receiverId = friend.id, let senderId = session.currentUser?.id else { return }
+        
+        isSharing = true
         let request = ShareRequest(senderId: senderId, receiverId: receiverId, modelId: modelId)
         
         Task {
             do {
                 try await modelController.shareModel(request: request)
                 await MainActor.run {
+                    isSharing = false
                     dismiss()
                 }
             } catch {
                 print("Failed to share model: \(error)")
+                await MainActor.run {
+                    isSharing = false
+                }
             }
         }
     }

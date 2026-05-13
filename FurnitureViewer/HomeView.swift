@@ -119,7 +119,7 @@ struct HomeView: View {
     }
 
     private var filteredModels: [FurnitureModel] {
-        storage.models.filter { $0.metadata.creatorId == session.currentUser?.id ?? "" }
+        storage.models
     }
     private func saveModel(from usdzURL: URL, id: UUID, name: String, categories: String, date: Date, imageData: Data?) {
         let modelID = id

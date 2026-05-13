@@ -26,6 +26,12 @@ class WebRTCClient: NSObject {
         setupPeerConnection()
     }
     
+    func setupPeerConnectionIfNeeded() {
+        if peerConnection == nil {
+            setupPeerConnection()
+        }
+    }
+    
     private func setupPeerConnection() {
         let config = RTCConfiguration()
         config.iceServers = [RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302"])]
