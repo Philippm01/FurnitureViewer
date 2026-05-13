@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		178F089E2FB40DDB00029A58 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 178F089D2FB40DDB00029A58 /* WebRTC */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		171992A72F4FE1C1007F5318 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				178F089E2FB40DDB00029A58 /* WebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +83,7 @@
 				171992992F4FE1BF007F5318 /* FurnitureViewer */,
 				171992A92F4FE1C1007F5318 /* FurnitureViewerTests */,
 				171992B32F4FE1C1007F5318 /* FurnitureViewerUITests */,
+				178F089C2FB40DDB00029A58 /* Frameworks */,
 				171992982F4FE1BF007F5318 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +96,13 @@
 				171992B02F4FE1C1007F5318 /* FurnitureViewerUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		178F089C2FB40DDB00029A58 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +125,7 @@
 			);
 			name = FurnitureViewer;
 			packageProductDependencies = (
+				178F089D2FB40DDB00029A58 /* WebRTC */,
 			);
 			productName = FurnitureViewer;
 			productReference = 171992972F4FE1BF007F5318 /* FurnitureViewer.app */;
@@ -195,6 +209,9 @@
 			);
 			mainGroup = 1719928E2F4FE1BF007F5318;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				178F08952FB40BF000029A58 /* XCRemoteSwiftPackageReference "WebRTC" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 171992982F4FE1BF007F5318 /* Products */;
 			projectDirPath = "";
@@ -570,6 +587,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		178F08952FB40BF000029A58 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 147.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		178F089D2FB40DDB00029A58 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 178F08952FB40BF000029A58 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1719928F2F4FE1BF007F5318 /* Project object */;
 }

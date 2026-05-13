@@ -11,13 +11,26 @@ class ModelDownloadTask: NSObject, ObservableObject, URLSessionDownloadDelegate 
 
     private var session: URLSession?
     private var task: URLSessionDownloadTask?
-    private let modelId: String
+    var currentModelId: String = ""
 
-    init(modelId: String) {
-        self.modelId = modelId
+    init(modelId: String = "") {
+        self.currentModelId = modelId
     }
 
-    func start(downloadURL: URL) {
+    func start(modelId: String, downloadURL: URL) {
+        self.currentModelId = modelId
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent("\(modelId).usdz")
+        print("ModelDownloadTask: Checking if file exists at \(destination.path)")
+        if FileManager.default.fileExists(atPath: destination.path) {
+            print("ModelDownloadTask: File already exists! Returning instantly.")
+            DispatchQueue.main.async {
+                self.progress = 1.0
+                self.downloadedURL = destination
+            }
+            return
+        }
+        
+        print("ModelDownloadTask: File does not exist. Starting download from \(downloadURL)")
         let config = URLSessionConfiguration.default
         session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
         task = session?.downloadTask(with: downloadURL)
@@ -25,6 +38,7 @@ class ModelDownloadTask: NSObject, ObservableObject, URLSessionDownloadDelegate 
     }
 
     func cancel() {
+        print("ModelDownloadTask: Cancelled download.")
         task?.cancel()
         task = nil
     }
@@ -43,7 +57,7 @@ class ModelDownloadTask: NSObject, ObservableObject, URLSessionDownloadDelegate 
                     downloadTask: URLSessionDownloadTask,
                     didFinishDownloadingTo location: URL) {
         let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(modelId).usdz")
+            .appendingPathComponent("\(currentModelId).usdz")
         do {
             if FileManager.default.fileExists(atPath: destination.path) {
                 try FileManager.default.removeItem(at: destination)

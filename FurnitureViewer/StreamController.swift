@@ -16,10 +16,14 @@ struct StreamSessionResponse: Codable {
 struct StreamCallRequest: Encodable {
     var callerId: String
     var receiverId: String
+    var streamId: String
+    var modelId: String
     
     enum CodingKeys: String, CodingKey {
         case callerId = "caller_id"
         case receiverId = "receiver_id"
+        case streamId = "stream_id"
+        case modelId = "model_id"
     }
 }
 
@@ -28,12 +32,14 @@ struct IncomingCallResponse: Codable {
     var streamId: String?
     var callerId: String?
     var status: String?
+    var modelId: String?
     
     enum CodingKeys: String, CodingKey {
         case callId = "call_id"
         case streamId = "stream_id"
         case callerId = "caller_id"
         case status
+        case modelId = "model_id"
     }
 }
 
@@ -54,12 +60,12 @@ class StreamController: NSObject, ObservableObject {
         return response
     }
 
-    func initiateCall(callerId: String, receiverId: String) async throws -> IncomingCallResponse {
+    func initiateCall(callerId: String, receiverId: String, streamId: String, modelId: String) async throws -> IncomingCallResponse {
         guard let url = URL(string: APIConfig.streamCallURL) else { throw URLError(.badURL) }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let payload = StreamCallRequest(callerId: callerId, receiverId: receiverId)
+        let payload = StreamCallRequest(callerId: callerId, receiverId: receiverId, streamId: streamId, modelId: modelId)
         request.httpBody = try JSONEncoder().encode(payload)
         
         let (data, _) = try await URLSession.shared.data(for: request)

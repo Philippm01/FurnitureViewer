@@ -10,7 +10,7 @@ class Session: ObservableObject {
     private let userDefaultsKey = "saved_user"
     
     private init() {
-        loadUser()
+        // loadUser()
     }
     
     func login(user: User) {

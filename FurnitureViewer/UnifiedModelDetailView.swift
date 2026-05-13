@@ -218,7 +218,7 @@ struct UnifiedModelDetailView: View {
     private func startDownload() {
         if case .cloud(let m) = source, let id = m.id {
             let url = URL(string: "\(APIConfig.modelsURL)/\(id)/download")!
-            downloadTask.start(downloadURL: url)
+            downloadTask.start(modelId: id, downloadURL: url)
         }
     }
 }

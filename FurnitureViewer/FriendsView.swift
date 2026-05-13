@@ -21,42 +21,17 @@ struct FriendsView: View {
     @State private var isStreaming = false
     @State private var streamSession: StreamSessionResponse?
     @State private var isHost = true
-    @State private var streamingModelName = ""
-    @State private var pollTimer: Timer?
+    @State private var streamingModel: FurnitureAPIModel?
+    @State private var streamingLocalURL: URL?
+    
+    @StateObject private var rtcManager = WebRTCManager()
 
     private let friendsController = FriendsController()
     private let userController = UserController()
     private let modelController = ModelController()
-    private let streamController = StreamController()
 
     var body: some View {
         List {
-            Section(header: Text("Answer AR Stream Call")) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Enter the Stream ID shared by your caller:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    HStack {
-                        TextField("Stream ID", text: $incomingStreamId)
-                            .textFieldStyle(.roundedBorder)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                        
-                        Button("Simulate Ring") {
-                            guard !incomingStreamId.isEmpty else { return }
-                            withAnimation(.spring()) {
-                                showIncomingCallRing = true
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.green)
-                        .disabled(incomingStreamId.isEmpty)
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-            
             if !receivedModels.isEmpty {
                 Section(header: Text("Received Models")) {
                     ForEach(receivedModels) { model in
@@ -129,7 +104,6 @@ struct FriendsView: View {
                             // Call / Stream Trigger Button
                             Button {
                                 selectedFriendToStream = friend
-                                showStreamModelPicker = true
                             } label: {
                                 Image(systemName: "video.fill")
                                     .foregroundColor(.red)
@@ -159,42 +133,50 @@ struct FriendsView: View {
         .navigationTitle("Friends")
         .onAppear {
             loadFriends()
-            startPolling()
         }
-        .onDisappear {
-            stopPolling()
+        .onChange(of: session.currentUser?.id) { newId in
+            if let userId = newId, !userId.isEmpty {
+                rtcManager.start(userId: userId)
+            }
+        }
+        .onChange(of: rtcManager.incomingCallStreamId) { newId in
+            if let streamId = newId, !self.isStreaming {
+                self.incomingStreamId = streamId
+                self.showIncomingCallRing = true
+            }
         }
         .sheet(isPresented: $showSendModelSheet) {
             if let friend = selectedFriendToSend {
                 SendModelView(friend: friend)
             }
         }
-        .sheet(isPresented: $showStreamModelPicker) {
-            if let friend = selectedFriendToStream {
-                StreamModelPickerView(friend: friend) { selectedModelName in
-                    startStreamHosting(modelName: selectedModelName)
-                }
+        .sheet(item: $selectedFriendToStream) { friend in
+            StreamModelPickerView(friend: friend) { selectedModel, localURL in
+                startStreamHosting(model: selectedModel, localURL: localURL)
             }
         }
         .fullScreenCover(isPresented: $showIncomingCallRing) {
             IncomingCallView(streamId: incomingStreamId) {
                 // Accepted
                 showIncomingCallRing = false
-                acceptIncomingStream(streamId: incomingStreamId)
+                rtcManager.respondToCall(accepted: true)
+                self.isHost = false
+                self.isStreaming = true
             } onDeny: {
                 // Denied
                 showIncomingCallRing = false
+                rtcManager.respondToCall(accepted: false)
+                rtcManager.incomingCallStreamId = nil
             }
         }
         .fullScreenCover(isPresented: $isStreaming) {
-            if let session = streamSession {
-                LiveStreamView(session: session, isHost: isHost, modelName: streamingModelName)
-            }
+            LiveStreamView(rtcManager: rtcManager, isHost: isHost, model: streamingModel, localURL: streamingLocalURL)
         }
     }
     
     private func loadFriends() {
         guard let userId = session.currentUser?.id, !userId.isEmpty else { return }
+        rtcManager.start(userId: userId)
         isLoading = true
         Task {
             do {
@@ -212,68 +194,20 @@ struct FriendsView: View {
         }
     }
 
-    private func startStreamHosting(modelName: String) {
+    private func startStreamHosting(model: FurnitureAPIModel, localURL: URL?) {
         guard let callerId = session.currentUser?.id, let receiverId = selectedFriendToStream?.id else { return }
-        Task {
-            do {
-                let sessionRes = try await streamController.createSession()
-                // Initiate call with backend signaling
-                _ = try await streamController.initiateCall(callerId: callerId, receiverId: receiverId)
-                await MainActor.run {
-                    self.streamSession = sessionRes
-                    self.isHost = true
-                    self.streamingModelName = modelName
-                    self.isStreaming = true
-                }
-            } catch {
-                print("Failed to start stream: \(error)")
-            }
-        }
-    }
-    
-    private func startPolling() {
-        pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
-            pollIncomingCalls()
-        }
-    }
-    
-    private func stopPolling() {
-        pollTimer?.invalidate()
-        pollTimer = nil
-    }
-
-    private func pollIncomingCalls() {
-        guard let userId = session.currentUser?.id, !userId.isEmpty else { return }
-        Task {
-            do {
-                let calls = try await streamController.checkIncomingCalls(userId: userId)
-                if let call = calls.first, let streamId = call.streamId {
-                    await MainActor.run {
-                        if !self.showIncomingCallRing && !self.isStreaming {
-                            self.incomingStreamId = streamId
-                            withAnimation(.spring()) {
-                                self.showIncomingCallRing = true
-                            }
-                        }
-                    }
-                }
-            } catch {
-                // Ignore silent polling errors
-            }
-        }
-    }
-    
-    private func acceptIncomingStream(streamId: String) {
-        let baseWs = APIConfig.streamHost.replacingOccurrences(of: "http://", with: "ws://")
-        let viewerWs = "\(baseWs)/ws/\(streamId)/viewer"
-        let hostWs = "\(baseWs)/ws/\(streamId)/host"
-        let sessionRes = StreamSessionResponse(streamId: streamId, hostWs: hostWs, viewerWs: viewerWs)
         
-        self.streamSession = sessionRes
-        self.isHost = false
-        self.streamingModelName = "Shared AR View"
-        self.isStreaming = true
+        let streamId = UUID().uuidString
+        rtcManager.callTarget(targetId: receiverId, streamId: streamId, modelId: model.id ?? "")
+        
+        self.selectedFriendToStream = nil
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            self.isHost = true
+            self.streamingModel = model
+            self.streamingLocalURL = localURL
+            self.isStreaming = true
+        }
     }
     
     private func searchUsers() {
@@ -412,35 +346,50 @@ struct IncomingCallView: View {
 }
 
 // MARK: - Stream Model Picker
+// MARK: - Stream Model Picker
 struct StreamModelPickerView: View {
     let friend: User
-    let onSelectModel: (String) -> Void
-    @State private var models: [FurnitureAPIModel] = []
-    @State private var isLoading = true
+    let onSelectModel: (FurnitureAPIModel, URL?) -> Void
+    @StateObject private var storage = ScanStorage()
     @Environment(\.dismiss) var dismiss
-    private let controller = ModelController()
+    
+    private var localModels: [FurnitureModel] {
+        storage.models.filter { $0.metadata.creatorId == Session.shared.currentUser?.id ?? "" }
+    }
     
     var body: some View {
         NavigationStack {
-            List(models) { model in
-                Button {
-                    onSelectModel(model.name)
-                    dismiss()
-                } label: {
-                    HStack {
-                        Image(systemName: "cube.fill")
-                            .foregroundColor(.blue)
-                        VStack(alignment: .leading) {
-                            Text(model.name)
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            Text(model.categories)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+            Group {
+                if localModels.isEmpty {
+                    ContentUnavailableView("No Local Scans", systemImage: "cube.transparent", description: Text("Scan some models first to stream them."))
+                } else {
+                    List(localModels) { local in
+                        Button {
+                            let apiModel = FurnitureAPIModel(
+                                id: local.id.uuidString,
+                                name: local.metadata.name,
+                                creatorName: local.metadata.creator,
+                                categories: "Local Scan",
+                                size: Double(local.metadata.size) / 1_000_000
+                            )
+                            onSelectModel(apiModel, storage.modelURL(for: local))
+                        } label: {
+                            HStack {
+                                Image(systemName: "cube.fill")
+                                    .foregroundColor(.blue)
+                                VStack(alignment: .leading) {
+                                    Text(local.metadata.name)
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+                                    Text("Local Scan")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "video.fill")
+                                    .foregroundColor(.red)
+                            }
                         }
-                        Spacer()
-                        Image(systemName: "video.fill")
-                            .foregroundColor(.red)
                     }
                 }
             }
@@ -449,24 +398,6 @@ struct StreamModelPickerView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                }
-            }
-            .task {
-                do {
-                    let res = try await controller.discover(page: 1)
-                    await MainActor.run {
-                        self.models = res
-                        self.isLoading = false
-                    }
-                } catch {
-                    await MainActor.run { isLoading = false }
-                }
-            }
-            .overlay {
-                if isLoading {
-                    ProgressView()
-                } else if models.isEmpty {
-                    ContentUnavailableView("No Models Available", systemImage: "cube.transparent")
                 }
             }
         }
@@ -562,80 +493,94 @@ struct SendModelView: View {
 }
 
 // MARK: - Live Stream View
+// MARK: - Live Stream View
 struct LiveStreamView: View {
-    let session: StreamSessionResponse
+    @ObservedObject var rtcManager: WebRTCManager
     let isHost: Bool
-    let modelName: String
-    @StateObject private var streamController = StreamController()
+    let model: FurnitureAPIModel?
+    let localURL: URL?
+    
+    @StateObject private var downloadTask: ModelDownloadTask
     @Environment(\.dismiss) var dismiss
 
+    init(rtcManager: WebRTCManager, isHost: Bool, model: FurnitureAPIModel?, localURL: URL? = nil) {
+        self.rtcManager = rtcManager
+        self.isHost = isHost
+        self.model = model
+        self.localURL = localURL
+        _downloadTask = StateObject(wrappedValue: ModelDownloadTask(modelId: model?.id ?? ""))
+    }
+
     var body: some View {
-        NavigationStack {
-            VStack {
-                Spacer()
-                
-                ZStack {
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(Color.black.opacity(0.05))
-                        .frame(height: 400)
-                    
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            if isHost {
+                if let url = localURL ?? downloadTask.downloadedURL {
+                    // Send AR View Video to WebRTC
+                    ARCaptureView(usdzURL: url) { pixelBuffer, timestamp in
+                        rtcManager.webRTC.captureFrame(pixelBuffer, timestamp: timestamp)
+                    }
+                    .ignoresSafeArea()
+                } else {
                     VStack(spacing: 20) {
-                        ZStack {
-                            Circle()
-                                .fill(isHost ? Color.red.opacity(0.1) : Color.blue.opacity(0.1))
-                                .frame(width: 100, height: 100)
-                            
-                            Image(systemName: isHost ? "video.fill" : "eye.fill")
-                                .font(.system(size: 40))
-                                .foregroundColor(isHost ? .red : .blue)
-                        }
-                        
-                        VStack(spacing: 8) {
-                            Text(isHost ? "Hosting Live Stream" : "Viewing Live Stream")
-                                .font(.title2.bold())
-                            
-                            Text("Model: \(modelName)")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            
-                            Text("Stream ID: \(session.streamId)")
-                                .font(.caption.monospaced())
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        if isHost {
-                            Button {
-                                UIPasteboard.general.string = session.streamId
-                            } label: {
-                                Label("Copy Stream ID", systemImage: "doc.on.doc")
-                                    .font(.caption.bold())
-                            }
-                            .buttonStyle(.bordered)
-                        }
+                        ProgressView()
+                            .scaleEffect(2.0)
+                        Text("Downloading Model...")
+                            .foregroundColor(.white)
+                            .padding(.top)
                     }
                 }
-                .padding()
-                
+            } else {
+                // Receiver Video View
+                if let videoTrack = rtcManager.remoteVideoTrack {
+                    RTCVideoViewRepresentable(videoTrack: videoTrack)
+                        .ignoresSafeArea()
+                } else {
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .scaleEffect(2.0)
+                            .tint(.white)
+                        Text("Waiting for sender's video...")
+                            .foregroundColor(.white)
+                            .padding(.top)
+                    }
+                }
+            }
+            
+            // Overlay controls
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        rtcManager.endCall()
+                        dismiss()
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    .padding()
+                }
                 Spacer()
                 
-                Button(role: .destructive) {
-                    streamController.stop()
-                    dismiss()
-                } label: {
-                    Text(isHost ? "End Stream" : "Leave Stream")
-                        .frame(maxWidth: .infinity)
-                        .padding()
+                if !rtcManager.isConnected {
+                    HStack {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 10, height: 10)
+                        Text("Connecting Peer-to-Peer...")
+                            .foregroundColor(.white)
+                            .font(.caption)
+                    }
+                    .padding(.bottom)
                 }
-                .buttonStyle(.borderedProminent)
-                .padding()
             }
-            .navigationTitle(isHost ? "Streaming Live" : "AR Viewer")
-            .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                if isHost {
-                    streamController.startHost(wsURL: session.hostWs)
-                } else {
-                    streamController.startViewer(wsURL: session.viewerWs)
+        }
+        .onAppear {
+            if isHost, localURL == nil, let model = model {
+                if let id = model.id, let url = URL(string: "\(APIConfig.modelsURL)/\(id)/download") {
+                    downloadTask.start(modelId: id, downloadURL: url)
                 }
             }
         }
